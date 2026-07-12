@@ -4,7 +4,7 @@ import sys
 import time
 import random
 from pathlib import Path
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 import requests
 from bs4 import BeautifulSoup
@@ -128,7 +128,7 @@ def main():
     prices_path.write_text(json.dumps({
         'ok': True,
         'data': data,
-        'updated_at': datetime.now().isoformat(),
+        'updated_at': datetime.now(timezone.utc).isoformat(),
     }))
     print(f'Updated prices.json and history.json for {today} ({len(scraped)} cities)')
 
