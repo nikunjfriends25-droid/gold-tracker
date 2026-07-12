@@ -1,4 +1,4 @@
-name: Scrape gold prices
+name: Scrape gold prices hourly
 
 on:
   schedule:
