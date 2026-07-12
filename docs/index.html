@@ -726,7 +726,7 @@ function selectChartCity(city) {
 
 async function getHistoryData() {
   if (!historyCache) {
-    const r = await fetch('data/history.json');
+    const r = await fetch('data/history.json?t=' + Date.now());
     historyCache = await r.json();
   }
   return historyCache;
@@ -825,7 +825,7 @@ async function refreshData() {
 // ─── Main load ────────────────────────────────────────────────────────────────
 async function loadPrices() {
   try {
-    const res = await fetch('data/prices.json');
+    const res = await fetch('data/prices.json?t=' + Date.now());
     const json = await res.json();
     if (!json.ok) return;
 
