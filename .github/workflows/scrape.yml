@@ -1,0 +1,33 @@
+name: Scrape gold prices
+
+on:
+  schedule:
+    # Runs hourly. GoodReturns updates once daily but this ensures
+    # the data file is fresh within an hour of any site update.
+    - cron: '0 * * * *'
+  workflow_dispatch:  # allow manual trigger from GitHub UI
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Scrape and export
+        run: python scripts/scrape_and_export.py
+
+      - name: Commit updated data
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'data: hourly price update'
+          file_pattern: 'docs/data/*.json'

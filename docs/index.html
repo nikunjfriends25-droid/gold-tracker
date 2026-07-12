@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gold Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --gold: #c8a84b;
+    --gold-light: #f0d060;
+    --gold-dark: #8a6c22;
+    --bg: #0f0f13;
+    --surface: #1a1a22;
+    --surface2: #242430;
+    --border: #2e2e3e;
+    --text: #e8e8f0;
+    --text-muted: #8888aa;
+    --red: #e05555;
+    --green: #44bb77;
+    --up: #44bb77;
+    --down: #e05555;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ALERT BANNER */
+  #alert-banner {
+    display: none;
+    background: linear-gradient(90deg, #8b0000, #c00020, #8b0000);
+    color: #fff;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border-bottom: 2px solid #ff4444;
+    animation: pulse-border 1.5s infinite;
+  }
+  #alert-banner.visible { display: block; }
+  @keyframes pulse-border {
+    0%, 100% { border-bottom-color: #ff4444; }
+    50% { border-bottom-color: #ff9999; }
+  }
+  .alert-messages { line-height: 1.7; }
+
+  /* HEADER */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .logo { font-size: 22px; font-weight: 700; color: var(--gold); letter-spacing: -0.5px; white-space: nowrap; }
+  #last-updated { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+
+  .header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+  /* KARAT TOGGLE */
+  .karat-toggle {
+    display: flex;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .karat-toggle button {
+    padding: 7px 18px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .karat-toggle button.active {
+    background: var(--gold);
+    color: #000;
+  }
+
+  /* REFRESH BUTTON */
+  #refresh-btn {
+    padding: 7px 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s;
+  }
+  #refresh-btn:hover { background: var(--border); }
+  #refresh-btn.loading .spin { animation: spin 0.8s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* MAIN LAYOUT */
+  main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+  /* SECTION HEADERS */
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    padding-left: 2px;
+  }
+
+  /* CITY GRID */
+  .state-section { margin-bottom: 28px; }
+  .city-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+
+  .city-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.1s;
+    position: relative;
+    overflow: hidden;
+  }
+  .city-card:hover { border-color: var(--gold-dark); transform: translateY(-1px); }
+  .city-card.alert-triggered { border-color: var(--red); box-shadow: 0 0 0 1px var(--red)33; }
+  .city-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--gold), var(--gold-light));
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .city-card:hover::before, .city-card.alert-triggered::before { opacity: 1; }
+
+  .city-name { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .city-buy { font-size: 22px; font-weight: 700; color: var(--text); }
+  .city-buy .currency { font-size: 14px; color: var(--text-muted); font-weight: 400; }
+  .city-sell-row { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+  .city-sell { font-size: 12px; color: var(--text-muted); }
+  .city-delta {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .city-delta.up { color: var(--up); background: #44bb7722; }
+  .city-delta.down { color: var(--down); background: #e0555522; }
+  .city-delta.flat { color: var(--text-muted); }
+
+  .no-data { color: var(--text-muted); font-size: 12px; font-style: italic; }
+
+  /* SIGNAL METER */
+  .signal-section { margin-bottom: 28px; }
+  .signal-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+  .signal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .signal-title { font-size: 14px; font-weight: 600; }
+  .signal-city-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+
+  .meter-track {
+    position: relative;
+    height: 20px;
+    background: linear-gradient(90deg, #1a4a2e, #4a8a4a, #8a6c22, #c8a84b, #e05555);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    overflow: visible;
+  }
+  .meter-marker {
+    position: absolute;
+    top: -6px;
+    width: 4px;
+    height: 32px;
+    border-radius: 2px;
+    transform: translateX(-50%);
+  }
+  .meter-marker.current { background: #fff; box-shadow: 0 0 6px #fff8; }
+  .meter-marker.threshold { background: var(--red); box-shadow: 0 0 6px var(--red)88; }
+  .meter-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); }
+  .meter-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }
+  .meter-legend span { display: flex; align-items: center; gap: 5px; }
+  .leg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ALERT PANEL */
+  .alert-panel-section { margin-bottom: 28px; }
+  .alert-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .alert-panel-header {
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+  }
+  .alert-panel-header:hover { background: var(--surface2); }
+  .alert-panel-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .alert-toggle-icon { transition: transform 0.2s; color: var(--text-muted); }
+  .alert-toggle-icon.open { transform: rotate(180deg); }
+
+  .alert-panel-body {
+    display: none;
+    padding: 0 20px 20px;
+    border-top: 1px solid var(--border);
+  }
+  .alert-panel-body.open { display: block; }
+
+  .alert-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .alert-field label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+  .alert-field input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 600;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .alert-field input:focus { border-color: var(--gold); }
+  .alert-hint { font-size: 11px; margin-top: 4px; height: 16px; }
+  .alert-hint.above { color: var(--red); }
+  .alert-hint.below { color: var(--green); }
+
+  .alert-save-row { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+  #save-alerts-btn {
+    padding: 9px 22px;
+    background: var(--gold);
+    border: none;
+    border-radius: 8px;
+    color: #000;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  #save-alerts-btn:hover { background: var(--gold-light); }
+  #alert-save-msg { font-size: 12px; color: var(--green); opacity: 0; transition: opacity 0.3s; }
+  #alert-save-msg.visible { opacity: 1; }
+
+  /* CHART */
+  .chart-section { margin-bottom: 28px; }
+  .chart-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+  .chart-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .chart-cities { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .chart-city-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  .chart-city-label { font-size: 12px; color: var(--text-muted); }
+
+  .range-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .range-tab {
+    padding: 5px 12px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .range-tab.active { background: var(--gold); border-color: var(--gold); color: #000; }
+  .range-tab:hover:not(.active) { border-color: var(--gold-dark); color: var(--text); }
+
+  #price-chart { max-height: 300px; }
+
+  /* FOOTER */
+  footer {
+    text-align: center;
+    padding: 16px;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+  }
+
+  /* LOADING SKELETON */
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s infinite;
+    border-radius: 4px;
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* MOBILE */
+  @media (max-width: 640px) {
+    header { padding: 10px 14px; gap: 8px; }
+    .logo { font-size: 17px; }
+    #last-updated { display: none; }
+    .karat-toggle button { padding: 6px 12px; font-size: 12px; }
+    #refresh-btn { padding: 6px 12px; font-size: 12px; }
+    main { padding: 12px; }
+    .city-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .city-card { padding: 12px; }
+    .city-buy { font-size: 18px; }
+    .city-name { font-size: 11px; }
+    .chart-controls { flex-direction: column; align-items: flex-start; }
+    .alert-fields { grid-template-columns: 1fr; }
+    .signal-container { padding: 14px 16px; }
+    .signal-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .range-tab { padding: 5px 10px; font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ALERT BANNER -->
+<div id="alert-banner">
+  <div>⚠️ SELL ALERT</div>
+  <div class="alert-messages" id="alert-messages"></div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="header-left">
+    <div class="logo">Gold Tracker</div>
+    <span id="last-updated"></span>
+  </div>
+  <div class="header-right">
+    <div class="karat-toggle">
+      <button class="active" id="btn-22k" onclick="setKarat('22K')">22K</button>
+      <button id="btn-24k" onclick="setKarat('24K')">24K</button>
+    </div>
+    <button id="refresh-btn" onclick="refreshData()">
+      <span class="spin">↻</span> Refresh
+    </button>
+  </div>
+</header>
+
+<main>
+
+  <!-- TAMIL NADU CITIES -->
+  <div class="state-section">
+    <div class="section-label">Tamil Nadu</div>
+    <div class="city-grid" id="grid-tn">
+      <div class="city-card"><div class="city-name">Chennai</div><div class="city-buy skeleton" style="height:28px;width:80%;margin-bottom:8px"></div></div>
+      <div class="city-card"><div class="city-name">Coimbatore</div><div class="city-buy skeleton" style="height:28px;width:80%;margin-bottom:8px"></div></div>
+      <div class="city-card"><div class="city-name">Madurai</div><div class="city-buy skeleton" style="height:28px;width:80%;margin-bottom:8px"></div></div>
+      <div class="city-card"><div class="city-name">Tirupur</div><div class="city-buy skeleton" style="height:28px;width:80%;margin-bottom:8px"></div></div>
+    </div>
+  </div>
+
+  <!-- KERALA CITIES -->
+  <div class="state-section">
+    <div class="section-label">Kerala</div>
+    <div class="city-grid" id="grid-kl">
+      <div class="city-card"><div class="city-name">Kozhikode</div><div class="city-buy skeleton" style="height:28px;width:80%;margin-bottom:8px"></div></div>
+      <div class="city-card"><div class="city-name">Kochi</div><div class="city-buy skeleton" style="height:28px;width:80%;margin-bottom:8px"></div></div>
+      <div class="city-card"><div class="city-name">Thrissur</div><div class="city-buy skeleton" style="height:28px;width:80%;margin-bottom:8px"></div></div>
+      <div class="city-card"><div class="city-name">Thiruvananthapuram</div><div class="city-buy skeleton" style="height:28px;width:80%;margin-bottom:8px"></div></div>
+    </div>
+  </div>
+
+  <!-- SIGNAL METER -->
+  <div class="signal-section">
+    <div class="section-label">30-Day Signal Meter</div>
+    <div class="signal-container">
+      <div class="signal-header">
+        <div class="signal-title">Price position within 30D range</div>
+        <select class="signal-city-select" id="signal-city" onchange="renderSignalMeter()">
+          <option>Chennai</option><option>Coimbatore</option><option>Madurai</option><option>Tirupur</option>
+          <option>Kozhikode</option><option>Kochi</option><option>Thrissur</option><option>Thiruvananthapuram</option>
+        </select>
+      </div>
+      <div class="meter-track" id="meter-track">
+        <div class="meter-marker current" id="meter-current" style="left:50%"></div>
+        <div class="meter-marker threshold" id="meter-threshold" style="left:80%"></div>
+      </div>
+      <div class="meter-labels">
+        <span id="meter-lo">30D Low</span>
+        <span id="meter-hi">30D High</span>
+      </div>
+      <div class="meter-legend">
+        <span><div class="leg-dot" style="background:#fff"></div> Current price</span>
+        <span><div class="leg-dot" style="background:var(--red)"></div> Alert threshold</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALERT EDITOR -->
+  <div class="alert-panel-section">
+    <div class="section-label">Sell Alert Thresholds</div>
+    <div class="alert-panel">
+      <div class="alert-panel-header" onclick="toggleAlertPanel()">
+        <div class="alert-panel-title">
+          🔔 Set sell alert prices
+          <span id="alert-summary" style="font-size:12px;color:var(--text-muted);font-weight:400"></span>
+        </div>
+        <span class="alert-toggle-icon" id="alert-toggle-icon">▼</span>
+      </div>
+      <div class="alert-panel-body" id="alert-panel-body">
+        <div class="alert-fields">
+          <div class="alert-field">
+            <label>22K Alert Price (₹/gram)</label>
+            <input type="number" id="input-22k" min="5000" max="50000" step="100">
+            <div class="alert-hint" id="hint-22k"></div>
+          </div>
+          <div class="alert-field">
+            <label>24K Alert Price (₹/gram)</label>
+            <input type="number" id="input-24k" min="5000" max="50000" step="100">
+            <div class="alert-hint" id="hint-24k"></div>
+          </div>
+        </div>
+        <div class="alert-save-row">
+          <button id="save-alerts-btn" onclick="saveAlerts()">Save Alerts</button>
+          <span id="alert-save-msg">Saved!</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRICE CHART -->
+  <div class="chart-section">
+    <div class="section-label">Price History</div>
+    <div class="chart-container">
+      <div class="chart-controls">
+        <div class="chart-cities">
+          <span class="chart-city-label" style="color:var(--gold)">●</span>
+          <select class="chart-city-select" id="chart-city1" onchange="loadChart()">
+            <option>Chennai</option><option>Coimbatore</option><option>Madurai</option><option>Tirupur</option>
+            <option>Kozhikode</option><option>Kochi</option><option>Thrissur</option><option>Thiruvananthapuram</option>
+          </select>
+          <span class="chart-city-label" style="color:#44bbee">●</span>
+          <select class="chart-city-select" id="chart-city2" onchange="loadChart()">
+            <option value="">— None —</option>
+            <option>Chennai</option><option>Coimbatore</option><option>Madurai</option><option>Tirupur</option>
+            <option>Kozhikode</option><option selected>Kochi</option><option>Thrissur</option><option>Thiruvananthapuram</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div class="karat-toggle" style="border-radius:6px">
+            <button id="btn-buy" class="active" onclick="setPriceType('buy')">Buy</button>
+            <button id="btn-sell" onclick="setPriceType('sell')">Sell</button>
+          </div>
+          <div class="range-tabs">
+            <button class="range-tab" data-days="7" onclick="setRange(7)">1W</button>
+            <button class="range-tab" data-days="14" onclick="setRange(14)">2W</button>
+            <button class="range-tab active" data-days="30" onclick="setRange(30)">1M</button>
+            <button class="range-tab" data-days="90" onclick="setRange(90)">3M</button>
+            <button class="range-tab" data-days="180" onclick="setRange(180)">6M</button>
+          </div>
+        </div>
+      </div>
+      <canvas id="price-chart"></canvas>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  Gold prices sourced from GoodReturns.in · Updated hourly via GitHub Actions · For informational purposes only · Not financial advice
+</footer>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+let priceData = {};
+let alertConfig = { alert_22k: 16000, alert_24k: 16000 };
+let activeKarat = '22K';
+let chartDays = 30;
+let chartPriceType = 'buy';
+let priceChart = null;
+let historyCache = null;
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+function requestNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function fireAlertNotification(message) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('Gold Price Alert', { body: message });
+  }
+}
+
+// ─── Alert persistence (localStorage) ────────────────────────────────────────
+function loadAlerts() {
+  try {
+    const stored = localStorage.getItem('gold_alerts');
+    if (stored) {
+      const p = JSON.parse(stored);
+      alertConfig = {
+        alert_22k: p.alert_22k || 16000,
+        alert_24k: p.alert_24k || 16000,
+      };
+    }
+  } catch(e) {}
+}
+
+function saveAlerts() {
+  const a22 = parseInt(document.getElementById('input-22k').value);
+  const a24 = parseInt(document.getElementById('input-24k').value);
+  if (isNaN(a22) || isNaN(a24) || a22 < 1000 || a24 < 1000) {
+    alert('Enter valid threshold prices (min 1000).');
+    return;
+  }
+  alertConfig = { alert_22k: a22, alert_24k: a24 };
+  localStorage.setItem('gold_alerts', JSON.stringify(alertConfig));
+  updateAlertSummary();
+  renderSignalMeter();
+  evaluateAlerts();
+  const msg = document.getElementById('alert-save-msg');
+  msg.classList.add('visible');
+  setTimeout(() => msg.classList.remove('visible'), 2500);
+}
+
+// ─── Alert banner ─────────────────────────────────────────────────────────────
+function evaluateAlerts() {
+  const messages = [];
+  for (const [city, karats] of Object.entries(priceData)) {
+    for (const [karat, prices] of Object.entries(karats)) {
+      const thresh = karat === '22K' ? alertConfig.alert_22k : alertConfig.alert_24k;
+      if (prices.buy >= thresh) {
+        messages.push(
+          `${city} ${karat} buy ₹${prices.buy.toLocaleString('en-IN')} ≥ threshold ₹${thresh.toLocaleString('en-IN')}`
+        );
+      }
+    }
+  }
+  if (messages.length > 0) {
+    document.title = '⚠️ SELL ALERT — Gold Tracker';
+    document.getElementById('alert-banner').classList.add('visible');
+    document.getElementById('alert-messages').innerHTML = messages.map(m => `<div>• ${m}</div>`).join('');
+    fireAlertNotification(messages[0]);
+    document.querySelectorAll('.city-card').forEach(card => {
+      const cityName = card.querySelector('.city-name')?.textContent;
+      const triggered = messages.some(m => m.startsWith(cityName));
+      card.classList.toggle('alert-triggered', triggered);
+    });
+  } else {
+    document.title = 'Gold Tracker';
+    document.getElementById('alert-banner').classList.remove('visible');
+    document.querySelectorAll('.city-card').forEach(c => c.classList.remove('alert-triggered'));
+  }
+}
+
+// ─── City cards ───────────────────────────────────────────────────────────────
+const TN_CITIES = ['Chennai', 'Coimbatore', 'Madurai', 'Tirupur'];
+const KL_CITIES = ['Kozhikode', 'Kochi', 'Thrissur', 'Thiruvananthapuram'];
+
+function renderCards(cities, gridId) {
+  const grid = document.getElementById(gridId);
+  grid.innerHTML = cities.map(city => {
+    const d = priceData[city]?.[activeKarat];
+    if (!d) {
+      return `<div class="city-card">
+        <div class="city-name">${city}</div>
+        <div class="no-data">No data</div>
+      </div>`;
+    }
+    const delta = d.buy - d.prev_buy;
+    const deltaAbs = Math.abs(delta);
+    const deltaClass = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
+    const deltaStr = delta > 0
+      ? `+₹${deltaAbs.toLocaleString('en-IN')}`
+      : delta < 0
+        ? `-₹${deltaAbs.toLocaleString('en-IN')}`
+        : '—';
+    const thresh = activeKarat === '22K' ? alertConfig.alert_22k : alertConfig.alert_24k;
+    const isAlert = d.buy >= thresh;
+    return `<div class="city-card${isAlert ? ' alert-triggered' : ''}" onclick="selectChartCity('${city}')">
+      <div class="city-name">${city}</div>
+      <div class="city-buy"><span class="currency">₹</span>${d.buy.toLocaleString('en-IN')}</div>
+      <div class="city-sell-row">
+        <span class="city-sell">Sell ₹${d.sell.toLocaleString('en-IN')}</span>
+        <span class="city-delta ${deltaClass}">${deltaStr}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderAllCards() {
+  renderCards(TN_CITIES, 'grid-tn');
+  renderCards(KL_CITIES, 'grid-kl');
+}
+
+// ─── Karat toggle ─────────────────────────────────────────────────────────────
+function setKarat(k) {
+  activeKarat = k;
+  document.getElementById('btn-22k').classList.toggle('active', k === '22K');
+  document.getElementById('btn-24k').classList.toggle('active', k === '24K');
+  renderAllCards();
+  renderSignalMeter();
+  evaluateAlerts();
+  loadChart();
+}
+
+// ─── Signal meter ─────────────────────────────────────────────────────────────
+function renderSignalMeter() {
+  const city = document.getElementById('signal-city').value;
+  const d = priceData[city]?.[activeKarat];
+  if (!d || !d.hi30 || !d.lo30 || d.hi30 === d.lo30) return;
+
+  const range = d.hi30 - d.lo30;
+  const curPct = Math.max(0, Math.min(100, ((d.buy - d.lo30) / range) * 100));
+  const thresh = activeKarat === '22K' ? alertConfig.alert_22k : alertConfig.alert_24k;
+  const thrPct = Math.max(0, Math.min(100, ((thresh - d.lo30) / range) * 100));
+
+  document.getElementById('meter-current').style.left = curPct + '%';
+  document.getElementById('meter-threshold').style.left = thrPct + '%';
+  document.getElementById('meter-lo').textContent = '₹' + d.lo30.toLocaleString('en-IN');
+  document.getElementById('meter-hi').textContent = '₹' + d.hi30.toLocaleString('en-IN');
+}
+
+// ─── Alert panel ──────────────────────────────────────────────────────────────
+function toggleAlertPanel() {
+  const body = document.getElementById('alert-panel-body');
+  const icon = document.getElementById('alert-toggle-icon');
+  body.classList.toggle('open');
+  icon.classList.toggle('open');
+}
+
+function updateAlertHints() {
+  for (const karat of ['22K', '24K']) {
+    const key = karat === '22K' ? '22k' : '24k';
+    const inp = document.getElementById(`input-${key}`);
+    const hint = document.getElementById(`hint-${key}`);
+    if (!inp || !hint) continue;
+    const val = parseInt(inp.value);
+    if (isNaN(val)) { hint.textContent = ''; hint.className = 'alert-hint'; continue; }
+    let best = 0;
+    for (const d of Object.values(priceData)) {
+      const p = d[karat]?.buy;
+      if (p && p > best) best = p;
+    }
+    if (!best) { hint.textContent = ''; continue; }
+    const diff = val - best;
+    if (diff <= 0) {
+      hint.textContent = `Alert active now (current: ₹${best.toLocaleString('en-IN')})`;
+      hint.className = 'alert-hint above';
+    } else {
+      hint.textContent = `₹${diff.toLocaleString('en-IN')} above current best price`;
+      hint.className = 'alert-hint below';
+    }
+  }
+}
+
+function updateAlertSummary() {
+  document.getElementById('alert-summary').textContent =
+    `22K ₹${alertConfig.alert_22k.toLocaleString('en-IN')}  ·  24K ₹${alertConfig.alert_24k.toLocaleString('en-IN')}`;
+  document.getElementById('input-22k').value = alertConfig.alert_22k;
+  document.getElementById('input-24k').value = alertConfig.alert_24k;
+  updateAlertHints();
+}
+
+document.getElementById('input-22k')?.addEventListener('input', updateAlertHints);
+document.getElementById('input-24k')?.addEventListener('input', updateAlertHints);
+
+// ─── Chart ────────────────────────────────────────────────────────────────────
+function setPriceType(type) {
+  chartPriceType = type;
+  document.getElementById('btn-buy').classList.toggle('active', type === 'buy');
+  document.getElementById('btn-sell').classList.toggle('active', type === 'sell');
+  loadChart();
+}
+
+function setRange(days) {
+  chartDays = days;
+  document.querySelectorAll('.range-tab').forEach(t => {
+    t.classList.toggle('active', parseInt(t.dataset.days) === days);
+  });
+  loadChart();
+}
+
+function selectChartCity(city) {
+  document.getElementById('chart-city1').value = city;
+  loadChart();
+}
+
+async function getHistoryData() {
+  if (!historyCache) {
+    const r = await fetch('data/history.json');
+    historyCache = await r.json();
+  }
+  return historyCache;
+}
+
+async function loadChart() {
+  const city1 = document.getElementById('chart-city1').value;
+  const city2 = document.getElementById('chart-city2').value;
+  const hist = await getHistoryData();
+
+  const slice = (city, karat) => {
+    const entries = hist[city]?.[karat] || [];
+    return entries.slice(-chartDays);
+  };
+
+  const h1 = slice(city1, activeKarat);
+  const h2 = city2 ? slice(city2, activeKarat) : null;
+
+  if (!h1.length) return;
+
+  const labels = h1.map(h => {
+    const d = new Date(h.date + 'T00:00:00');
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  });
+
+  const pr = labels.length > 60 ? 0 : 3;
+  const priceKey = chartPriceType === 'buy' ? 'buy_price' : 'sell_price';
+  const typeLabel = chartPriceType === 'buy' ? 'Buy' : 'Sell';
+
+  const datasets = [{
+    label: `${city1} ${activeKarat} ${typeLabel}`,
+    data: h1.map(h => h[priceKey]),
+    borderColor: '#c8a84b',
+    backgroundColor: '#c8a84b18',
+    tension: 0.3,
+    fill: true,
+    pointRadius: pr,
+    pointHoverRadius: 5,
+  }];
+
+  if (h2 && h2.length > 0) {
+    datasets.push({
+      label: `${city2} ${activeKarat} ${typeLabel}`,
+      data: h2.map(h => h[priceKey]),
+      borderColor: '#44bbee',
+      backgroundColor: '#44bbee18',
+      tension: 0.3,
+      fill: false,
+      pointRadius: pr,
+      pointHoverRadius: 5,
+    });
+  }
+
+  if (priceChart) priceChart.destroy();
+  priceChart = new Chart(document.getElementById('price-chart'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#8888aa', font: { size: 12 } } },
+        tooltip: {
+          callbacks: { label: ctx => ` ₹${ctx.parsed.y.toLocaleString('en-IN')}` }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#8888aa', maxTicksLimit: 8, font: { size: 11 } },
+          grid: { color: '#2e2e3e' }
+        },
+        y: {
+          ticks: {
+            color: '#8888aa',
+            font: { size: 11 },
+            callback: v => '₹' + v.toLocaleString('en-IN')
+          },
+          grid: { color: '#2e2e3e' }
+        }
+      }
+    }
+  });
+}
+
+// ─── Refresh ──────────────────────────────────────────────────────────────────
+async function refreshData() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('loading');
+  btn.disabled = true;
+  historyCache = null;
+  await loadPrices();
+  btn.classList.remove('loading');
+  btn.disabled = false;
+}
+
+// ─── Main load ────────────────────────────────────────────────────────────────
+async function loadPrices() {
+  try {
+    const res = await fetch('data/prices.json');
+    const json = await res.json();
+    if (!json.ok) return;
+
+    priceData = json.data;
+
+    renderAllCards();
+    updateAlertSummary();
+    renderSignalMeter();
+    evaluateAlerts();
+    loadChart();
+
+    if (json.updated_at) {
+      const d = new Date(json.updated_at);
+      document.getElementById('last-updated').textContent =
+        `· ${d.toLocaleDateString('en-IN', {day:'numeric',month:'short'})} ${d.toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'})}`;
+    }
+  } catch(e) {
+    console.error('Failed to load prices:', e);
+  }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+requestNotificationPermission();
+loadAlerts();
+loadPrices();
+</script>
+</body>
+</html>
