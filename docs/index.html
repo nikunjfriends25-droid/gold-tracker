@@ -319,6 +319,50 @@
 
   #price-chart { max-height: 300px; }
 
+  /* PROJECTION + SEASONAL */
+  .proj-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .proj-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+  .proj-title { font-size: 14px; font-weight: 600; margin-bottom: 14px; }
+  .proj-controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .proj-target-label { font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+  .proj-target-label input {
+    width: 90px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 5px 8px;
+    outline: none;
+  }
+  .proj-target-label input:focus { border-color: var(--gold); }
+  .proj-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .proj-table th {
+    text-align: left; font-weight: 600; color: var(--text-muted);
+    padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 12px;
+  }
+  .proj-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); }
+  .proj-table td:not(:first-child) { font-weight: 700; }
+  .proj-sub { font-weight: 400; font-size: 11px; }
+  .proj-note { font-size: 12px; color: var(--text-muted); margin-top: 12px; line-height: 1.5; }
+  .proj-note em { color: var(--gold); font-style: normal; }
+  .proj-disclaimer { font-size: 10px; color: var(--text-muted); opacity: 0.7; margin-top: 10px; line-height: 1.4; }
+
+  .season-bars { display: flex; gap: 4px; align-items: flex-end; height: 110px; margin-bottom: 4px; }
+  .season-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; height: 100%; }
+  .season-bar { width: 100%; border-radius: 3px 3px 0 0; background: var(--gold-dark); min-height: 2px; }
+  .season-bar.negative { background: var(--red); }
+  .season-col.current .season-bar { background: var(--gold-light); box-shadow: 0 0 8px #f0d06055; }
+  .season-lbl { font-size: 9px; color: var(--text-muted); }
+  .season-col.current .season-lbl { color: var(--gold-light); font-weight: 700; }
+  .season-val { font-size: 9px; color: var(--text-muted); }
+
   /* FOOTER */
   footer {
     text-align: center;
@@ -355,6 +399,8 @@
     .chart-controls { flex-direction: column; align-items: flex-start; }
     .alert-fields { grid-template-columns: 1fr; }
     .signal-container { padding: 14px 16px; }
+    .proj-grid { grid-template-columns: 1fr; }
+    .proj-card { padding: 14px 16px; }
     .signal-header { flex-direction: column; align-items: flex-start; gap: 8px; }
     .range-tab { padding: 5px 10px; font-size: 11px; }
   }
@@ -472,6 +518,42 @@
           <button id="save-alerts-btn" onclick="saveAlerts()">Save Alerts</button>
           <span id="alert-save-msg">Saved!</span>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROJECTION + SEASONAL OUTLOOK -->
+  <div class="state-section">
+    <div class="section-label">Projection & Seasonal Outlook</div>
+    <div class="proj-grid">
+      <div class="proj-card">
+        <div class="proj-title">When could the sell price reach your target?</div>
+        <div class="proj-controls">
+          <select class="chart-city-select" id="proj-city" onchange="renderProjection()">
+            <option>Chennai</option><option>Coimbatore</option><option>Madurai</option><option>Tirupur</option>
+            <option>Kozhikode</option><option>Kochi</option><option>Thrissur</option><option>Thiruvananthapuram</option>
+            <option>Dubai</option>
+          </select>
+          <label class="proj-target-label">Target ₹
+            <input type="number" id="proj-target" value="15000" min="1000" step="100" onchange="renderProjection()" oninput="renderProjection()">
+          </label>
+        </div>
+        <table class="proj-table">
+          <thead><tr><th>Within</th><th>If 3-yr trend continues<br><span class="proj-sub">(+30%/yr)</span></th><th>If growth slows<br><span class="proj-sub">(long-run +10%/yr)</span></th></tr></thead>
+          <tbody id="proj-tbody"></tbody>
+        </table>
+        <div class="proj-note" id="proj-note"></div>
+        <div class="proj-disclaimer">Statistical extrapolation of past prices (3-yr XAU/INR drift & volatility, as of Jul 2026). Not a forecast. Not financial advice.</div>
+      </div>
+      <div class="proj-card">
+        <div class="proj-title">Seasonal pattern (3-yr average by month)</div>
+        <div class="season-bars" id="season-bars"></div>
+        <div class="proj-note">
+          Prices historically run up in the month <em>before</em> the autumn festival cluster —
+          Dussehra (20 Oct) → Dhanteras (6 Nov) → Diwali (8 Nov 2026) — and stall after.
+          January (wedding season) is the strongest month; June the weakest.
+        </div>
+        <div class="proj-disclaimer">Only 3 years of observations — a consistent pattern, not a guarantee.</div>
       </div>
     </div>
   </div>
@@ -654,6 +736,7 @@ function setKarat(k) {
   renderAllCards();
   renderSignalMeter();
   evaluateAlerts();
+  renderProjection();
   loadChart();
 }
 
@@ -826,6 +909,72 @@ async function loadChart() {
   });
 }
 
+// ─── Projection & seasonal outlook ────────────────────────────────────────────
+// Constants computed 2026-07-13 from 3 years of daily XAU/USD x USD/INR
+// (Yahoo Finance). To refresh: rerun the analysis in scripts/ or recompute
+// drift = mean(log daily returns)*252, vol = stdev*sqrt(252).
+const PROJ = { vol: 0.213, drift3y: 0.298, driftLR: 0.10 };
+// Avg monthly return (%) by calendar month, 3-yr history
+const SEASONALITY = [6.59, 4.00, 2.68, 2.88, 0.32, -4.52, 3.40, 2.25, 4.39, 4.76, 2.37, 1.14];
+
+function normCdf(x) {
+  // Abramowitz-Stegun erf approximation
+  const t = 1 / (1 + 0.2316419 * Math.abs(x));
+  const d = 0.3989423 * Math.exp(-x * x / 2);
+  let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return x > 0 ? 1 - p : p;
+}
+
+function hitProbability(S, B, driftYr, volYr, years) {
+  // P(GBM max over [0,T] >= B), closed form; drift is already the log-drift
+  if (S >= B) return 1;
+  const nu = driftYr, sg = volYr, T = years;
+  const lnSB = Math.log(S / B);
+  const d1 = (lnSB + nu * T) / (sg * Math.sqrt(T));
+  const d2 = (lnSB - nu * T) / (sg * Math.sqrt(T));
+  const p = normCdf(d1) + Math.pow(B / S, 2 * nu / (sg * sg)) * normCdf(d2);
+  return Math.min(1, Math.max(0, p));
+}
+
+function renderProjection() {
+  const city = document.getElementById('proj-city').value;
+  const target = parseInt(document.getElementById('proj-target').value);
+  const d = priceData[city]?.[activeKarat];
+  const tbody = document.getElementById('proj-tbody');
+  const note = document.getElementById('proj-note');
+  if (!d || isNaN(target) || target < 1000) { tbody.innerHTML = ''; note.textContent = ''; return; }
+  const cur = d.sell;
+
+  const horizons = [[3, 0.25], [6, 0.5], [12, 1], [24, 2]];
+  tbody.innerHTML = horizons.map(([mo, yr]) => {
+    const p1 = hitProbability(cur, target, PROJ.drift3y, PROJ.vol, yr);
+    const p2 = hitProbability(cur, target, PROJ.driftLR, PROJ.vol, yr);
+    return `<tr><td>${mo} months</td><td>${Math.round(p1 * 100)}%</td><td>${Math.round(p2 * 100)}%</td></tr>`;
+  }).join('');
+
+  if (cur >= target) {
+    note.innerHTML = `${city} ${activeKarat} sell ₹${cur.toLocaleString('en-IN')} is <em>already at or above</em> ₹${target.toLocaleString('en-IN')}.`;
+  } else {
+    const gap = ((target / cur - 1) * 100).toFixed(1);
+    note.innerHTML = `${city} ${activeKarat} sell is ₹${cur.toLocaleString('en-IN')} — target is <em>+${gap}%</em> away. Seasonally, the strongest odds this year are in the <em>Sep–Nov festival window</em>.`;
+  }
+}
+
+function renderSeasonal() {
+  const el = document.getElementById('season-bars');
+  const curMonth = new Date().getMonth();
+  const maxAbs = Math.max(...SEASONALITY.map(Math.abs));
+  const months = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+  el.innerHTML = SEASONALITY.map((v, i) => {
+    const h = Math.max(2, Math.abs(v) / maxAbs * 70);
+    return `<div class="season-col${i === curMonth ? ' current' : ''}" title="${v > 0 ? '+' : ''}${v}%/mo">
+      <div class="season-val">${v > 0 ? '+' : ''}${Math.round(v)}</div>
+      <div class="season-bar${v < 0 ? ' negative' : ''}" style="height:${h}px"></div>
+      <div class="season-lbl">${months[i]}</div>
+    </div>`;
+  }).join('');
+}
+
 // ─── Refresh ──────────────────────────────────────────────────────────────────
 async function refreshData() {
   const btn = document.getElementById('refresh-btn');
@@ -850,6 +999,7 @@ async function loadPrices() {
     updateAlertSummary();
     renderSignalMeter();
     evaluateAlerts();
+    renderProjection();
     loadChart();
 
     if (json.updated_at) {
@@ -869,6 +1019,7 @@ async function loadPrices() {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 requestNotificationPermission();
 loadAlerts();
+renderSeasonal();
 loadPrices();
 </script>
 </body>
