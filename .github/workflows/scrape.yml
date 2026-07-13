@@ -2,9 +2,10 @@ name: Scrape gold prices hourly
 
 on:
   schedule:
-    # Runs hourly. GoodReturns updates once daily but this ensures
-    # the data file is fresh within an hour of any site update.
-    - cron: '0 * * * *'
+    # Hourly at :23 — top-of-hour (minute 0) is GitHub's most congested
+    # cron slot and gets skipped under load; an odd minute is far more
+    # reliable. Runs can still drift 5-15 min; that's normal for Actions.
+    - cron: '23 * * * *'
   workflow_dispatch:  # allow manual trigger from GitHub UI
 
 jobs:
