@@ -1,5 +1,6 @@
 """GitHub Actions: scrape all 8 cities, update docs/data/prices.json and history.json."""
 import json
+import re
 import sys
 import time
 import random
@@ -20,16 +21,31 @@ CITIES = {
     'Madurai': 'madurai', 'Tirupur': 'tirupur',
     'Kozhikode': 'kozhikode', 'Kochi': 'kochi',
     'Thrissur': 'thrissur', 'Thiruvananthapuram': 'trivandrum',
+    'Dubai': 'dubai',  # quoted in AED with decimals; converted to INR below
 }
 
 
-def parse_price(text):
+def parse_price(text, decimal=False):
     text = text.split('(')[0]
+    if decimal:
+        # AED prices like "د.إ459.75" — the currency symbol itself contains a dot,
+        # so grab the first digit-led number instead of stripping chars
+        m = re.search(r'\d[\d,]*(?:\.\d+)?', text)
+        return float(m.group().replace(',', '')) if m else 0
     digits = ''.join(filter(str.isdigit, text))
     return int(digits) if digits else 0
 
 
-def scrape_city(city, slug):
+def get_aed_inr():
+    try:
+        r = requests.get('https://api.exchangerate-api.com/v4/latest/AED', timeout=10)
+        return r.json()['rates']['INR']
+    except Exception as e:
+        print(f'[fx] AED/INR fetch failed: {e}')
+        return None
+
+
+def scrape_city(city, slug, decimal=False):
     url = f'https://www.goodreturns.in/gold-rates/{slug}.html'
     try:
         r = requests.get(url, headers=HEADERS, timeout=15)
@@ -49,13 +65,13 @@ def scrape_city(city, slug):
                 continue
             if len(cells) < 3:
                 continue
-            p24 = parse_price(cells[1].get_text())
-            p22 = parse_price(cells[2].get_text())
+            p24 = parse_price(cells[1].get_text(), decimal)
+            p22 = parse_price(cells[2].get_text(), decimal)
             results = []
             if p22 > 0:
-                results.append({'city': city, 'karat': '22K', 'buy': p22, 'sell': int(p22 * 0.985)})
+                results.append({'city': city, 'karat': '22K', 'buy': p22, 'sell': p22 * 0.985})
             if p24 > 0:
-                results.append({'city': city, 'karat': '24K', 'buy': p24, 'sell': int(p24 * 0.985)})
+                results.append({'city': city, 'karat': '24K', 'buy': p24, 'sell': p24 * 0.985})
             return results if results else None
     except Exception as e:
         print(f'[scraper] Parse error {city}: {e}')
@@ -73,10 +89,21 @@ def main():
     old_prices = json.loads(prices_path.read_text()) if prices_path.exists() else {'data': {}}
 
     # Scrape
+    aed_inr = get_aed_inr()
     scraped = {}
     for city, slug in CITIES.items():
-        rows = scrape_city(city, slug)
+        is_dubai = city == 'Dubai'
+        if is_dubai and not aed_inr:
+            print('[scraper] Dubai: SKIPPED (no AED/INR rate)')
+            continue
+        rows = scrape_city(city, slug, decimal=is_dubai)
         if rows:
+            if is_dubai:
+                for r in rows:
+                    r['buy'] *= aed_inr
+                    r['sell'] *= aed_inr
+            for r in rows:
+                r['buy'], r['sell'] = int(round(r['buy'])), int(round(r['sell']))
             scraped[city] = {r['karat']: r for r in rows}
             print(f'[scraper] {city}: 22K={scraped[city].get("22K", {}).get("buy")} 24K={scraped[city].get("24K", {}).get("buy")}')
         else:

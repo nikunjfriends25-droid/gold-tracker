@@ -342,7 +342,9 @@
   @media (max-width: 640px) {
     header { padding: 10px 14px; gap: 8px; }
     .logo { font-size: 17px; }
-    #last-updated { display: none; }
+    header { flex-wrap: wrap; }
+    .header-left { flex-wrap: wrap; }
+    #last-updated { font-size: 10px; }
     .karat-toggle button { padding: 6px 12px; font-size: 12px; }
     #refresh-btn { padding: 6px 12px; font-size: 12px; }
     main { padding: 12px; }
@@ -407,6 +409,14 @@
     </div>
   </div>
 
+  <!-- INTERNATIONAL -->
+  <div class="state-section">
+    <div class="section-label">International</div>
+    <div class="city-grid" id="grid-intl">
+      <div class="city-card"><div class="city-name">Dubai</div><div class="city-buy skeleton" style="height:28px;width:80%;margin-bottom:8px"></div></div>
+    </div>
+  </div>
+
   <!-- SIGNAL METER -->
   <div class="signal-section">
     <div class="section-label">30-Day Signal Meter</div>
@@ -416,6 +426,7 @@
         <select class="signal-city-select" id="signal-city" onchange="renderSignalMeter()">
           <option>Chennai</option><option>Coimbatore</option><option>Madurai</option><option>Tirupur</option>
           <option>Kozhikode</option><option>Kochi</option><option>Thrissur</option><option>Thiruvananthapuram</option>
+          <option>Dubai</option>
         </select>
       </div>
       <div class="meter-track" id="meter-track">
@@ -475,12 +486,14 @@
           <select class="chart-city-select" id="chart-city1" onchange="loadChart()">
             <option>Chennai</option><option>Coimbatore</option><option>Madurai</option><option>Tirupur</option>
             <option>Kozhikode</option><option>Kochi</option><option>Thrissur</option><option>Thiruvananthapuram</option>
+            <option>Dubai</option>
           </select>
           <span class="chart-city-label" style="color:#44bbee">●</span>
           <select class="chart-city-select" id="chart-city2" onchange="loadChart()">
             <option value="">— None —</option>
             <option>Chennai</option><option>Coimbatore</option><option>Madurai</option><option>Tirupur</option>
             <option>Kozhikode</option><option selected>Kochi</option><option>Thrissur</option><option>Thiruvananthapuram</option>
+            <option>Dubai</option>
           </select>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -504,7 +517,7 @@
 </main>
 
 <footer>
-  Gold prices sourced from GoodReturns.in · Updated hourly via GitHub Actions · For informational purposes only · Not financial advice
+  Gold prices sourced from GoodReturns.in · Dubai rates converted from AED at the live exchange rate · Updated hourly via GitHub Actions · For informational purposes only · Not financial advice
 </footer>
 
 <script>
@@ -594,6 +607,7 @@ function evaluateAlerts() {
 // ─── City cards ───────────────────────────────────────────────────────────────
 const TN_CITIES = ['Chennai', 'Coimbatore', 'Madurai', 'Tirupur'];
 const KL_CITIES = ['Kozhikode', 'Kochi', 'Thrissur', 'Thiruvananthapuram'];
+const INTL_CITIES = ['Dubai'];
 
 function renderCards(cities, gridId) {
   const grid = document.getElementById(gridId);
@@ -629,6 +643,7 @@ function renderCards(cities, gridId) {
 function renderAllCards() {
   renderCards(TN_CITIES, 'grid-tn');
   renderCards(KL_CITIES, 'grid-kl');
+  renderCards(INTL_CITIES, 'grid-intl');
 }
 
 // ─── Karat toggle ─────────────────────────────────────────────────────────────
@@ -839,8 +854,12 @@ async function loadPrices() {
 
     if (json.updated_at) {
       const d = new Date(json.updated_at);
-      document.getElementById('last-updated').textContent =
-        `· ${d.toLocaleDateString('en-IN', {day:'numeric',month:'short'})} ${d.toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'})}`;
+      const ist = d.toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: 'numeric', month: 'short',
+        hour: '2-digit', minute: '2-digit', hour12: true
+      });
+      document.getElementById('last-updated').textContent = `· Updated ${ist} IST`;
     }
   } catch(e) {
     console.error('Failed to load prices:', e);
