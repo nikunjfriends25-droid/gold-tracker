@@ -9,6 +9,8 @@ HEADERS = {
 }
 
 def _parse_price(text: str) -> int:
+    # Strip change indicator like "₹14,508(-1)" → "₹14,508"
+    text = text.split('(')[0]
     digits = ''.join(filter(str.isdigit, text))
     return int(digits) if digits else 0
 

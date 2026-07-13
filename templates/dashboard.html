@@ -464,12 +464,18 @@
             <option>Kozhikode</option><option selected>Kochi</option><option>Thrissur</option><option>Thiruvananthapuram</option>
           </select>
         </div>
-        <div class="range-tabs">
-          <button class="range-tab" data-days="7" onclick="setRange(7)">1W</button>
-          <button class="range-tab" data-days="14" onclick="setRange(14)">2W</button>
-          <button class="range-tab active" data-days="30" onclick="setRange(30)">1M</button>
-          <button class="range-tab" data-days="90" onclick="setRange(90)">3M</button>
-          <button class="range-tab" data-days="180" onclick="setRange(180)">6M</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="karat-toggle" style="border-radius:6px">
+            <button id="btn-buy" class="active" onclick="setPriceType('buy')">Buy</button>
+            <button id="btn-sell" onclick="setPriceType('sell')">Sell</button>
+          </div>
+          <div class="range-tabs">
+            <button class="range-tab" data-days="7" onclick="setRange(7)">1W</button>
+            <button class="range-tab" data-days="14" onclick="setRange(14)">2W</button>
+            <button class="range-tab active" data-days="30" onclick="setRange(30)">1M</button>
+            <button class="range-tab" data-days="90" onclick="setRange(90)">3M</button>
+            <button class="range-tab" data-days="180" onclick="setRange(180)">6M</button>
+          </div>
         </div>
       </div>
       <canvas id="price-chart"></canvas>
@@ -488,6 +494,7 @@ let priceData = {};
 let alertConfig = { alert_22k: 16000, alert_24k: 16000 };
 let activeKarat = '22K';
 let chartDays = 30;
+let chartPriceType = 'buy';
 let priceChart = null;
 
 // ─── Notifications ────────────────────────────────────────────────────────────
@@ -672,6 +679,13 @@ document.getElementById('input-22k')?.addEventListener('input', updateAlertHints
 document.getElementById('input-24k')?.addEventListener('input', updateAlertHints);
 
 // ─── Chart ────────────────────────────────────────────────────────────────────
+function setPriceType(type) {
+  chartPriceType = type;
+  document.getElementById('btn-buy').classList.toggle('active', type === 'buy');
+  document.getElementById('btn-sell').classList.toggle('active', type === 'sell');
+  loadChart();
+}
+
 function setRange(days) {
   chartDays = days;
   document.querySelectorAll('.range-tab').forEach(t => {
@@ -699,26 +713,30 @@ async function loadChart() {
     return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   });
 
+  const pr = labels.length > 60 ? 0 : 3;
+  const priceKey = chartPriceType === 'buy' ? 'buy_price' : 'sell_price';
+  const typeLabel = chartPriceType === 'buy' ? 'Buy' : 'Sell';
+
   const datasets = [{
-    label: `${city1} ${activeKarat}`,
-    data: r1.history.map(h => h.buy_price),
+    label: `${city1} ${activeKarat} ${typeLabel}`,
+    data: r1.history.map(h => h[priceKey]),
     borderColor: '#c8a84b',
     backgroundColor: '#c8a84b18',
     tension: 0.3,
     fill: true,
-    pointRadius: labels.length > 60 ? 0 : 3,
+    pointRadius: pr,
     pointHoverRadius: 5,
   }];
 
   if (r2) {
     datasets.push({
-      label: `${city2} ${activeKarat}`,
-      data: r2.history.map(h => h.buy_price),
+      label: `${city2} ${activeKarat} ${typeLabel}`,
+      data: r2.history.map(h => h[priceKey]),
       borderColor: '#44bbee',
       backgroundColor: '#44bbee18',
       tension: 0.3,
       fill: false,
-      pointRadius: labels.length > 60 ? 0 : 3,
+      pointRadius: pr,
       pointHoverRadius: 5,
     });
   }
