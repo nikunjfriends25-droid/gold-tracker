@@ -1021,6 +1021,14 @@ requestNotificationPermission();
 loadAlerts();
 renderSeasonal();
 loadPrices();
+
+// Auto-refresh: re-fetch published data every 5 minutes while the tab is
+// open, and immediately when the tab regains focus. loadPrices() re-runs
+// alert evaluation, so threshold alerts fire without manual interaction.
+setInterval(() => { historyCache = null; loadPrices(); }, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) { historyCache = null; loadPrices(); }
+});
 </script>
 </body>
 </html>

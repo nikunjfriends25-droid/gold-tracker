@@ -2,10 +2,11 @@ name: Scrape gold prices hourly
 
 on:
   schedule:
-    # Hourly at :23 — top-of-hour (minute 0) is GitHub's most congested
-    # cron slot and gets skipped under load; an odd minute is far more
-    # reliable. Runs can still drift 5-15 min; that's normal for Actions.
-    - cron: '23 * * * *'
+    # GitHub silently drops a large share of scheduled runs on free tier
+    # (observed: 4 of 5 hourly slots skipped). Schedule 3x per hour so that
+    # even with drops, data lands roughly hourly. Runs are ~35s each and
+    # Actions minutes are free on public repos.
+    - cron: '9,29,49 * * * *'
   workflow_dispatch:  # allow manual trigger from GitHub UI
 
 jobs:
